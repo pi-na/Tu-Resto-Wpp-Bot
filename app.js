@@ -1,48 +1,50 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const express = require('express');
-const axios = require('axios');
+const { Client, LocalAuth } = require("whatsapp-web.js");
+const qrcode = require("qrcode-terminal");
+const express = require("express");
+const axios = require("axios");
 
 // Axios configuration with base URL for the API
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:8000'
+    baseURL: "http://127.0.0.1:8000",
 });
 
 const app = express();
-app.use(express.json());  // Para procesar cuerpos JSON
-app.use(express.urlencoded({ extended: true }));  // Para cuerpos URL-encoded
+app.use(express.json()); // Para procesar cuerpos JSON
+app.use(express.urlencoded({ extended: true })); // Para cuerpos URL-encoded
 
 const port = 3000;
 
-// WhatsApp Web client setup with LocalAuth
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: 'client-one' // Puedes tener diferentes clientes usando IDs diferentes
-    })
+        clientId: "client-one",
+    }),
+    puppeteer: {
+        args: ["--no-sandbox"],
+        headless: true,
+    },
 });
 
 // WPP-WEB JS (handling QR code)
-client.on('qr', qr => {
+client.on("qr", (qr) => {
     console.log("Generando QR");
     qrcode.generate(qr, { small: true });
 });
 
 // When the client is ready
-client.on('ready', () => {
-    console.log('Cliente listo!');
-    setupAutoMessage(); // Llamada a tu función de auto mensajes
+client.on("ready", () => {
+    console.log("Cliente listo!");
 });
 
 // Handling incoming messages
-client.on('message', async msg => {
-    if(msg.body.includes('pedido:')) {
+client.on("message", async (msg) => {
+    if (msg.body.toLowerCase().includes("pedido:")) {
         try {
-            await api.post('/wpp', {
-                body: msg.body.split('pedido:')[1].trim(), // Extrae el mensaje
-                phone_number: msg.from.split('@')[0] // Extrae el número del mensaje
+            await api.post("/wpp", {
+                body: msg.body.split("pedido:")[1].trim(),
+                phone_number: msg.from.split("@")[0],
             });
         } catch (error) {
-            console.error('ERROR PROCESANDO EL MENSAJE', error);
+            console.error("ERROR PROCESANDO EL MENSAJE", error);
         }
     }
 });
@@ -52,18 +54,19 @@ app.listen(port, () => {
     console.log("Server Listening on PORT:", port);
 });
 
-// Endpoint for sending messages (aún no implementado)
-app.post('/send_message', (req, res) => {
-    console.log('Enviando con mensaje:', req.body);
+app.post("/send-message", async (req, res) => {
+    try {
+        const phone_number = req.body.phone_number;
+        const message = req.body.message;
 
-    // Accede directamente a los valores del cuerpo
-    const phone_number = req.body.phone_number;
-    const body = req.body.message;
+        const phone_number_formatted = phone_number + "@c.us";
 
-    // Asegúrate de que los datos existan antes de enviar el mensaje
-    client.sendMessage(phone_number + '@c.us', body);
-    res.status(200).send('Mensaje enviado correctamente');
+        await client.sendMessage(phone_number_formatted, message);
+        res.status(200).send("Mensaje enviado correctamente");
+    } catch (error) {
+        console.error("Error al enviar el mensaje:", error);
+        res.status(500).send("Error al enviar el mensaje");
+    }
 });
 
-// Initialize the WhatsApp client
 client.initialize();
